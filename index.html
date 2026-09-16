@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Maze Runner</title>
+<style>
+  :root {
+    --bg: #f4f1ea;
+    --panel: #ffffff;
+    --ink: #1f2933;
+    --muted: #6b7684;
+    --wall: #2b3440;
+    --line: #dcd7cc;
+    --player: #e8590c;
+    --goal: #2f9e44;
+    --trail: rgba(232, 89, 12, 0.14);
+    --accent: #1971c2;
+    --shadow: 0 10px 30px rgba(31, 41, 51, 0.12);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #14171c;
+      --panel: #1d2128;
+      --ink: #e9ecef;
+      --muted: #909aa6;
+      --wall: #aeb7c2;
+      --line: #2c323b;
+      --player: #ff922b;
+      --goal: #51cf66;
+      --trail: rgba(255, 146, 43, 0.16);
+      --accent: #4dabf7;
+      --shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #14171c;
+    --panel: #1d2128;
+    --ink: #e9ecef;
+    --muted: #909aa6;
+    --wall: #aeb7c2;
+    --line: #2c323b;
+    --player: #ff922b;
+    --goal: #51cf66;
+    --trail: rgba(255, 146, 43, 0.16);
+    --accent: #4dabf7;
+    --shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Pretendard", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px 16px 40px;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  header { text-align: center; margin-bottom: 18px; }
+  h1 {
+    font-size: 1.5rem;
+    letter-spacing: -0.02em;
+    margin: 0 0 4px;
+  }
+  .sub { color: var(--muted); font-size: 0.85rem; margin: 0; }
+
+  .stats {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .stat {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 8px 14px;
+    min-width: 78px;
+    text-align: center;
+    box-shadow: var(--shadow);
+  }
+  .stat .k { font-size: 0.68rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+  .stat .v { font-size: 1.1rem; font-weight: 650; font-variant-numeric: tabular-nums; }
+
+  .board {
+    position: relative;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 12px;
+    box-shadow: var(--shadow);
+    touch-action: none;
+  }
+  canvas { display: block; border-radius: 6px; }
+
+  .overlay {
+    position: absolute;
+    inset: 0;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background: color-mix(in srgb, var(--panel) 88%, transparent);
+    border-radius: 16px;
+    backdrop-filter: blur(2px);
+  }
+  .overlay.show { display: flex; }
+  .overlay .big { font-size: 1.6rem; font-weight: 700; color: var(--goal); }
+  .overlay .small { color: var(--muted); font-size: 0.88rem; }
+
+  .controls { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; justify-content: center; }
+  button {
+    font: inherit;
+    font-weight: 600;
+    color: var(--ink);
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 9px 16px;
+    cursor: pointer;
+    transition: transform .08s ease, border-color .15s ease;
+  }
+  button:hover { border-color: var(--accent); }
+  button:active { transform: translateY(1px); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  .diffs {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 14px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 5px;
+    box-shadow: var(--shadow);
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .diffs button {
+    border: none;
+    background: transparent;
+    border-radius: 10px;
+    padding: 7px 14px;
+    font-size: 0.85rem;
+    color: var(--muted);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1px;
+    line-height: 1.25;
+  }
+  .diffs button .dim { font-size: 0.66rem; opacity: 0.75; font-variant-numeric: tabular-nums; }
+  .diffs button:hover { color: var(--ink); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+  .diffs button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+  .diffs button[aria-pressed="true"] .dim { opacity: 0.92; }
+
+  .dpad {
+    margin-top: 18px;
+    display: grid;
+    grid-template-columns: repeat(3, 56px);
+    grid-template-rows: repeat(3, 56px);
+    gap: 6px;
+  }
+  .dpad button { padding: 0; font-size: 1.2rem; border-radius: 12px; }
+  .dpad .up { grid-area: 1 / 2; }
+  .dpad .left { grid-area: 2 / 1; }
+  .dpad .down { grid-area: 3 / 2; }
+  .dpad .right { grid-area: 2 / 3; }
+
+  .hint { color: var(--muted); font-size: 0.8rem; margin-top: 14px; text-align: center; }
+
+  @media (min-width: 720px) { .dpad { display: none; } }
+</style>
+</head>
+<body>
+  <header>
+    <h1>미로찾기</h1>
+    <p class="sub">탐험가를 깃발이 꽂힌 출구까지 데려가세요</p>
+  </header>
+
+  <div class="diffs" id="diffs" role="group" aria-label="난이도 선택">
+    <button data-size="10" aria-pressed="false">쉬움<span class="dim">10 × 10</span></button>
+    <button data-size="16" aria-pressed="true">보통<span class="dim">16 × 16</span></button>
+    <button data-size="24" aria-pressed="false">어려움<span class="dim">24 × 24</span></button>
+    <button data-size="34" aria-pressed="false">악몽<span class="dim">34 × 34</span></button>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><div class="k">레벨</div><div class="v" id="statLevel">1</div></div>
+    <div class="stat"><div class="k">시간</div><div class="v" id="statTime">0.0s</div></div>
+    <div class="stat"><div class="k">이동</div><div class="v" id="statMoves">0</div></div>
+    <div class="stat"><div class="k">최고기록</div><div class="v" id="statBest">-</div></div>
+  </div>
+
+  <div class="board">
+    <canvas id="maze" width="520" height="520"></canvas>
+    <div class="overlay" id="overlay">
+      <div class="big">탈출 성공! 🎉</div>
+      <div class="small" id="overlayInfo"></div>
+      <button class="primary" id="nextBtn">다음 레벨 →</button>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button id="newBtn">새 미로</button>
+    <button id="resetBtn">처음부터</button>
+  </div>
+
+  <div class="dpad">
+    <button class="up" data-dir="up">▲</button>
+    <button class="left" data-dir="left">◀</button>
+    <button class="down" data-dir="down">▼</button>
+    <button class="right" data-dir="right">▶</button>
+  </div>
+
+  <p class="hint">방향키 / WASD 로 이동 · 모바일은 스와이프 또는 아래 버튼</p>
+
+<script>
+(function () {
+  const canvas = document.getElementById('maze');
+  const ctx = canvas.getContext('2d');
+  const overlay = document.getElementById('overlay');
+  const overlayInfo = document.getElementById('overlayInfo');
+  const elLevel = document.getElementById('statLevel');
+  const elTime = document.getElementById('statTime');
+  const elMoves = document.getElementById('statMoves');
+  const elBest = document.getElementById('statBest');
+  const diffs = document.getElementById('diffs');
+
+  const DIRS = {
+    up:    { dx: 0, dy: -1, wall: 0, opp: 2 },
+    right: { dx: 1, dy: 0,  wall: 1, opp: 3 },
+    down:  { dx: 0, dy: 1,  wall: 2, opp: 0 },
+    left:  { dx: -1, dy: 0, wall: 3, opp: 1 }
+  };
+
+  let N = 16;
+  let chosenSize = 16;
+  let cells = [];       // each: [topWall, rightWall, bottomWall, leftWall]
+  let visitedTrail = [];
+  let px = 0, py = 0;
+  let facing = 'down';  // which way the explorer is turned
+  let stride = 0;       // alternates each step so the legs swing
+  let level = 1;
+  let moves = 0;
+  let startTime = 0;
+  let running = false;
+  let finished = false;
+  let rafId = null;
+
+  function buildMaze(n) {
+    // start with all walls
+    const grid = [];
+    for (let i = 0; i < n * n; i++) grid.push([true, true, true, true]);
+
+    const seen = new Uint8Array(n * n);
+    const stack = [0];
+    seen[0] = 1;
+
+    const idx = (x, y) => y * n + x;
+
+    while (stack.length) {
+      const cur = stack[stack.length - 1];
+      const cx = cur % n, cy = (cur - (cur % n)) / n;
+
+      const options = [];
+      for (const key in DIRS) {
+        const d = DIRS[key];
+        const nx = cx + d.dx, ny = cy + d.dy;
+        if (nx < 0 || ny < 0 || nx >= n || ny >= n) continue;
+        if (seen[idx(nx, ny)]) continue;
+        options.push({ d, ni: idx(nx, ny) });
+      }
+
+      if (!options.length) { stack.pop(); continue; }
+
+      const pick = options[(Math.random() * options.length) | 0];
+      grid[cur][pick.d.wall] = false;
+      grid[pick.ni][pick.d.opp] = false;
+      seen[pick.ni] = 1;
+      stack.push(pick.ni);
+    }
+    return grid;
+  }
+
+  function fitCanvas() {
+    const maxW = Math.min(window.innerWidth - 60, 560);
+    const size = Math.max(240, Math.floor(maxW));
+    const dpr = window.devicePixelRatio || 1;
+    canvas.style.width = size + 'px';
+    canvas.style.height = size + 'px';
+    canvas.width = Math.floor(size * dpr);
+    canvas.height = Math.floor(size * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return size;
+  }
+
+  let viewSize = 520;
+  let panelColorCache = '#ffffff';   // used for the eyes, punched out of the head
+
+  function draw() {
+    const cs = viewSize / N;
+    const styles = getComputedStyle(document.documentElement);
+    const wallColor = styles.getPropertyValue('--wall').trim();
+    const playerColor = styles.getPropertyValue('--player').trim();
+    const goalColor = styles.getPropertyValue('--goal').trim();
+    const trailColor = styles.getPropertyValue('--trail').trim();
+    const panelColor = styles.getPropertyValue('--panel').trim();
+    panelColorCache = panelColor;
+
+    ctx.clearRect(0, 0, viewSize, viewSize);
+    ctx.fillStyle = panelColor;
+    ctx.fillRect(0, 0, viewSize, viewSize);
+
+    // trail
+    ctx.fillStyle = trailColor;
+    for (const t of visitedTrail) {
+      ctx.fillRect(t[0] * cs, t[1] * cs, cs, cs);
+    }
+
+    // goal — a flag planted on the exit tile
+    ctx.globalAlpha = 0.14;
+    ctx.fillStyle = goalColor;
+    ctx.fillRect((N - 1) * cs, (N - 1) * cs, cs, cs);
+    ctx.globalAlpha = 1;
+    drawFlag((N - 1) * cs + cs / 2, (N - 1) * cs + cs / 2, cs, goalColor, wallColor);
+
+    // walls
+    ctx.strokeStyle = wallColor;
+    ctx.lineWidth = Math.max(1.4, cs * 0.12);
+    ctx.lineCap = 'square';
+    ctx.beginPath();
+    for (let y = 0; y < N; y++) {
+      for (let x = 0; x < N; x++) {
+        const c = cells[y * N + x];
+        const x0 = x * cs, y0 = y * cs, x1 = x0 + cs, y1 = y0 + cs;
+        if (c[0]) { ctx.moveTo(x0, y0); ctx.lineTo(x1, y0); }
+        if (c[1]) { ctx.moveTo(x1, y0); ctx.lineTo(x1, y1); }
+        if (c[2]) { ctx.moveTo(x0, y1); ctx.lineTo(x1, y1); }
+        if (c[3]) { ctx.moveTo(x0, y0); ctx.lineTo(x0, y1); }
+      }
+    }
+    ctx.stroke();
+
+    // player
+    drawPerson(px * cs + cs / 2, py * cs + cs / 2, cs, playerColor);
+  }
+
+  function drawFlag(cx, cy, cs, flagColor, poleColor) {
+    const h = cs * 0.62;
+    const top = cy - h / 2;
+    const poleX = cx - cs * 0.16;
+
+    ctx.strokeStyle = poleColor;
+    ctx.lineWidth = Math.max(1, cs * 0.07);
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(poleX, top);
+    ctx.lineTo(poleX, top + h);
+    ctx.stroke();
+
+    ctx.fillStyle = flagColor;
+    ctx.beginPath();
+    ctx.moveTo(poleX, top);
+    ctx.lineTo(poleX + cs * 0.34, top + h * 0.17);
+    ctx.lineTo(poleX, top + h * 0.38);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // A small stick-figure explorer: round head, body, swinging arms and legs.
+  function drawPerson(cx, cy, cs, color) {
+    const s = cs * 0.78;                 // figure height
+    const lw = Math.max(1.2, s * 0.11);
+    const headR = s * 0.17;
+    const headY = cy - s * 0.30;
+    const shoulderY = headY + headR + lw * 0.4;
+    const hipY = cy + s * 0.10;
+    const footY = cy + s * 0.40;
+
+    const swing = stride ? 1 : -1;
+    const side = facing === 'left' ? -1 : facing === 'right' ? 1 : 0;
+
+    ctx.strokeStyle = color;
+    ctx.fillStyle = color;
+    ctx.lineWidth = lw;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    // body
+    ctx.beginPath();
+    ctx.moveTo(cx, shoulderY);
+    ctx.lineTo(cx, hipY);
+    ctx.stroke();
+
+    // legs — they scissor as you walk
+    const legSpread = s * 0.20;
+    ctx.beginPath();
+    ctx.moveTo(cx, hipY);
+    ctx.lineTo(cx + (side ? side * legSpread * swing : -legSpread * swing), footY);
+    ctx.moveTo(cx, hipY);
+    ctx.lineTo(cx + (side ? side * legSpread * -swing * 0.45 : legSpread * swing), footY);
+    ctx.stroke();
+
+    // arms
+    const armY = shoulderY + s * 0.12;
+    const armSpread = s * 0.22;
+    ctx.beginPath();
+    if (side) {
+      ctx.moveTo(cx, shoulderY + s * 0.04);
+      ctx.lineTo(cx + side * armSpread * 0.9, armY + s * 0.06 * swing);
+    } else {
+      ctx.moveTo(cx - armSpread, armY + s * 0.05 * swing);
+      ctx.lineTo(cx, shoulderY + s * 0.04);
+      ctx.lineTo(cx + armSpread, armY - s * 0.05 * swing);
+    }
+    ctx.stroke();
+
+    // head
+    ctx.beginPath();
+    ctx.arc(cx, headY, headR, 0, Math.PI * 2);
+    ctx.fill();
+
+    // face — only when turned toward the viewer, and only if big enough to read
+    if (facing !== 'up' && headR > 3.4) {
+      const eyeR = Math.max(0.7, headR * 0.19);
+      const eyeY = headY - headR * 0.08;
+      ctx.fillStyle = panelColorCache;
+      ctx.beginPath();
+      if (side) {
+        ctx.arc(cx + side * headR * 0.38, eyeY, eyeR, 0, Math.PI * 2);
+      } else {
+        ctx.arc(cx - headR * 0.36, eyeY, eyeR, 0, Math.PI * 2);
+        ctx.moveTo(cx + headR * 0.36 + eyeR, eyeY);
+        ctx.arc(cx + headR * 0.36, eyeY, eyeR, 0, Math.PI * 2);
+      }
+      ctx.fill();
+    }
+  }
+
+  function fmt(ms) { return (ms / 1000).toFixed(1) + 's'; }
+
+  function tick() {
+    if (running) elTime.textContent = fmt(performance.now() - startTime);
+    rafId = requestAnimationFrame(tick);
+  }
+
+  function bestKey() { return 'maze-best-' + N; }
+
+  function readBest() {
+    try { return localStorage.getItem(bestKey()); } catch (e) { return null; }
+  }
+  function writeBest(v) {
+    try { localStorage.setItem(bestKey(), v); } catch (e) { /* ignore */ }
+  }
+
+  function showBest() {
+    const b = readBest();
+    elBest.textContent = b ? (Number(b) / 1000).toFixed(1) + 's' : '-';
+  }
+
+  function newMaze(keepLevel) {
+    N = chosenSize;
+    cells = buildMaze(N);
+    resetRun();
+    if (!keepLevel) { level = 1; }
+    elLevel.textContent = level;
+    showBest();
+  }
+
+  function resetRun() {
+    px = 0; py = 0;
+    facing = 'down';
+    stride = 0;
+    moves = 0;
+    visitedTrail = [[0, 0]];
+    finished = false;
+    running = false;
+    startTime = 0;
+    elMoves.textContent = '0';
+    elTime.textContent = '0.0s';
+    overlay.classList.remove('show');
+    viewSize = fitCanvas();
+    draw();
+  }
+
+  function move(dirKey) {
+    if (finished) return;
+    const d = DIRS[dirKey];
+    if (!d) return;
+    const turned = facing !== dirKey;
+    facing = dirKey;
+
+    const c = cells[py * N + px];
+    if (c[d.wall]) { if (turned) draw(); return; }  // walled in: just face that way
+
+    if (!running) { running = true; startTime = performance.now(); }
+
+    px += d.dx; py += d.dy;
+    stride ^= 1;
+    moves++;
+    elMoves.textContent = moves;
+
+    const last = visitedTrail[visitedTrail.length - 2];
+    if (last && last[0] === px && last[1] === py) visitedTrail.pop();
+    else visitedTrail.push([px, py]);
+
+    if (px === N - 1 && py === N - 1) win();
+    draw();
+  }
+
+  function win() {
+    finished = true;
+    running = false;
+    const elapsed = performance.now() - startTime;
+    elTime.textContent = fmt(elapsed);
+
+    const prev = readBest();
+    const isBest = !prev || elapsed < Number(prev);
+    if (isBest) writeBest(String(Math.round(elapsed)));
+    showBest();
+
+    overlayInfo.textContent =
+      fmt(elapsed) + ' · ' + moves + '걸음' + (isBest ? ' · 신기록! 🏆' : '');
+    overlay.classList.add('show');
+  }
+
+  // --- input ---
+  const keyMap = {
+    ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right',
+    w: 'up', a: 'left', s: 'down', d: 'right',
+    W: 'up', A: 'left', S: 'down', D: 'right'
+  };
+
+  window.addEventListener('keydown', function (e) {
+    const dir = keyMap[e.key];
+    if (dir) { e.preventDefault(); move(dir); }
+  }, { passive: false });
+
+  document.querySelectorAll('.dpad button').forEach(function (b) {
+    b.addEventListener('click', function () { move(b.dataset.dir); });
+  });
+
+  let tsx = 0, tsy = 0;
+  const board = document.querySelector('.board');
+  board.addEventListener('touchstart', function (e) {
+    const t = e.changedTouches[0];
+    tsx = t.clientX; tsy = t.clientY;
+  }, { passive: true });
+  board.addEventListener('touchend', function (e) {
+    const t = e.changedTouches[0];
+    const dx = t.clientX - tsx, dy = t.clientY - tsy;
+    if (Math.abs(dx) < 18 && Math.abs(dy) < 18) return;
+    if (Math.abs(dx) > Math.abs(dy)) move(dx > 0 ? 'right' : 'left');
+    else move(dy > 0 ? 'down' : 'up');
+  }, { passive: true });
+
+  document.getElementById('newBtn').addEventListener('click', function () { newMaze(false); });
+  document.getElementById('resetBtn').addEventListener('click', resetRun);
+  document.getElementById('nextBtn').addEventListener('click', function () {
+    level++;
+    newMaze(true);
+  });
+  diffs.addEventListener('click', function (e) {
+    const b = e.target.closest('button');
+    if (!b) return;
+    chosenSize = parseInt(b.dataset.size, 10);
+    diffs.querySelectorAll('button').forEach(function (x) {
+      x.setAttribute('aria-pressed', x === b ? 'true' : 'false');
+    });
+    newMaze(false);
+  });
+
+  window.addEventListener('resize', function () {
+    viewSize = fitCanvas();
+    draw();
+  });
+
+  newMaze(false);
+  tick();
+})();
+</script>
+</body>
+</html>
