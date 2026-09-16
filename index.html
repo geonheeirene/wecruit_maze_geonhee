@@ -2,8 +2,30 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>Maze Runner</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>미로찾기 — Maze Runner</title>
+<meta name="description" content="매번 새로 생성되는 미로를 탈출하세요. 난이도 4단계, 기록 저장, 모바일 지원.">
+<meta name="theme-color" content="#f4f1ea" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#14171c" media="(prefers-color-scheme: dark)">
+
+<!-- 카카오톡·페이스북 등 공유 미리보기 (Open Graph) -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="미로찾기">
+<meta property="og:title" content="미로찾기 — Maze Runner">
+<meta property="og:description" content="매번 새로 생성되는 미로를 탈출하세요. 쉬움부터 악몽까지 4단계, 기록도 저장됩니다.">
+<meta property="og:url" content="https://geonheeirene.github.io/wecruit_maze_geonhee/">
+<meta property="og:image" content="https://geonheeirene.github.io/wecruit_maze_geonhee/og-image.png">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="미로와 탐험가 캐릭터가 그려진 미로찾기 게임 썸네일">
+<meta property="og:locale" content="ko_KR">
+
+<!-- 트위터/X -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="미로찾기 — Maze Runner">
+<meta name="twitter:description" content="매번 새로 생성되는 미로를 탈출하세요. 난이도 4단계, 기록 저장, 모바일 지원.">
+<meta name="twitter:image" content="https://geonheeirene.github.io/wecruit_maze_geonhee/og-image.png">
 <style>
   :root {
     --bg: #f4f1ea;
@@ -54,11 +76,13 @@
     color: var(--ink);
     font-family: "Pretendard", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
     min-height: 100vh;
+    min-height: 100dvh;           /* dodges the mobile address-bar resize */
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding: 24px 16px 40px;
+    padding: 24px 16px calc(32px + env(safe-area-inset-bottom));
     -webkit-tap-highlight-color: transparent;
+    overscroll-behavior: none;    /* no pull-to-refresh mid-game */
   }
 
   header { text-align: center; margin-bottom: 18px; }
@@ -177,6 +201,57 @@
   .hint { color: var(--muted); font-size: 0.8rem; margin-top: 14px; text-align: center; }
 
   @media (min-width: 720px) { .dpad { display: none; } }
+
+  /* Phones: tighten the chrome so the maze itself gets the space */
+  @media (max-width: 480px) {
+    body { padding: 14px 12px calc(20px + env(safe-area-inset-bottom)); }
+    header { margin-bottom: 12px; }
+    h1 { font-size: 1.25rem; }
+    .sub { font-size: 0.78rem; }
+    .stats { gap: 6px; margin-bottom: 10px; }
+    .stat { padding: 6px 10px; min-width: 66px; border-radius: 10px; }
+    .stat .k { font-size: 0.62rem; letter-spacing: 0.04em; }
+    .stat .v { font-size: 0.98rem; }
+    .diffs { gap: 3px; padding: 4px; margin-bottom: 10px; }
+    .diffs button { padding: 6px 10px; font-size: 0.8rem; }
+    .board { padding: 8px; border-radius: 12px; }
+    .controls { margin-top: 10px; }
+    .dpad { grid-template-columns: repeat(3, 58px); grid-template-rows: repeat(3, 58px); margin-top: 10px; }
+    .hint { display: none; }   /* the d-pad speaks for itself on a phone */
+  }
+
+  /* Landscape phones: side-by-side so nothing scrolls */
+  @media (max-height: 520px) and (orientation: landscape) {
+    body {
+      display: grid;
+      grid-template-areas:
+        "stats  board dpad"
+        "diffs  board dpad"
+        "ctrls  board dpad";
+      grid-template-columns: auto auto auto;
+      align-content: center;
+      justify-content: center;
+      align-items: center;
+      gap: 8px 16px;
+      padding: 8px 12px;
+    }
+    header, .hint { display: none; }
+    .stats { grid-area: stats; margin-bottom: 0; }
+    .diffs { grid-area: diffs; margin-bottom: 0; }
+    .board { grid-area: board; }
+    .controls { grid-area: ctrls; margin-top: 0; }
+    .dpad {
+      display: grid;
+      grid-area: dpad;
+      grid-template-columns: repeat(3, 48px);
+      grid-template-rows: repeat(3, 48px);
+      margin-top: 0;
+    }
+  }
+
+  /* Taps should never trigger the browser's double-tap zoom */
+  button, .board, .dpad { touch-action: manipulation; }
+  .board { touch-action: none; }
 </style>
 </head>
 <body>
@@ -291,8 +366,16 @@
   }
 
   function fitCanvas() {
-    const maxW = Math.min(window.innerWidth - 60, 560);
-    const size = Math.max(240, Math.floor(maxW));
+    // The board must fit the width *and* leave room for the panels above and
+    // the d-pad below — otherwise landscape phones scroll mid-game.
+    const narrow = window.innerWidth <= 480;
+    const landscape = window.innerHeight <= 520 && window.innerWidth > window.innerHeight;
+    // In landscape the panels sit beside the board, so only the padding costs height.
+    const sideChrome = landscape ? 420 : (narrow ? 42 : 60);
+    const vertChrome = landscape ? 42 : (narrow ? 330 : 390);
+    const maxW = Math.min(window.innerWidth - sideChrome, 560);
+    const maxH = window.innerHeight - vertChrome;
+    const size = Math.max(200, Math.floor(Math.min(maxW, maxH)));
     const dpr = window.devicePixelRatio || 1;
     canvas.style.width = size + 'px';
     canvas.style.height = size + 'px';
